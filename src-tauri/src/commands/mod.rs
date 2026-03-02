@@ -1,6 +1,7 @@
 pub mod ai_assistant;
 pub mod analytics;
 pub mod apple_notes;
+pub mod cursor_positions;
 pub mod darwinkit;
 pub mod embeddings;
 pub mod folders;

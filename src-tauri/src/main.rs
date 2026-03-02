@@ -10,8 +10,9 @@ mod windows;
 use commands::embeddings::EmbeddingIndex;
 use commands::index::NoteIndex;
 use commands::{
-    ai_assistant, analytics, apple_notes, darwinkit, embeddings, folders,
-    git_share, index, notes, on_this_day, settings, share, stats, sticked_notes,
+    ai_assistant, analytics, apple_notes, cursor_positions, darwinkit, embeddings,
+    folders, git_share, index, notes, on_this_day, settings, share, stats,
+    sticked_notes,
 };
 use shortcuts::shortcut_to_string;
 use state::AppState;
@@ -199,6 +200,7 @@ fn main() {
             settings::set_dock_icon_visibility,
             settings::set_tray_icon_visibility,
             settings::save_viewing_window_size,
+            settings::save_viewing_window_geometry,
             settings::save_capture_window_size,
             settings::import_theme_file,
             settings::export_theme_file,
@@ -217,6 +219,9 @@ fn main() {
             apple_notes::check_apple_notes_access,
             apple_notes::open_full_disk_access_settings,
             windows::show_apple_notes_picker_cmd,
+            cursor_positions::get_cursor_position,
+            cursor_positions::save_cursor_position,
+            cursor_positions::remove_cursor_position,
         ])
         .setup(|app| {
             // Build in-memory note index for fast search/list

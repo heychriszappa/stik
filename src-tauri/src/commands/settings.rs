@@ -114,6 +114,8 @@ pub struct StikSettings {
     #[serde(default)]
     pub viewing_window_size: Option<(f64, f64)>,
     #[serde(default)]
+    pub viewing_window_position: Option<(f64, f64)>,
+    #[serde(default)]
     pub custom_templates: Vec<CustomTemplate>,
     #[serde(default)]
     pub sidebar_position: String,
@@ -175,6 +177,7 @@ impl Default for StikSettings {
             analytics_notice_dismissed: false,
             font_size: 14,
             viewing_window_size: None,
+            viewing_window_position: None,
             custom_templates: vec![],
             sidebar_position: String::new(),
             auto_update_enabled: true,
@@ -318,6 +321,14 @@ pub fn apply_dock_icon_visibility(hide: bool) {
 pub fn save_viewing_window_size(width: f64, height: f64) -> Result<(), String> {
     let mut settings = load_settings_from_file()?;
     settings.viewing_window_size = Some((width, height));
+    save_settings_to_file(&settings)
+}
+
+#[tauri::command]
+pub fn save_viewing_window_geometry(width: f64, height: f64, x: f64, y: f64) -> Result<(), String> {
+    let mut settings = load_settings_from_file()?;
+    settings.viewing_window_size = Some((width, height));
+    settings.viewing_window_position = Some((x, y));
     save_settings_to_file(&settings)
 }
 

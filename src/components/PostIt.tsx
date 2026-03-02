@@ -30,7 +30,7 @@ import { loadGoogleFont, loadCustomFont } from "@/utils/fonts";
 
 interface PostItProps {
   folder: string;
-  onSave: (content: string, preferredFolder?: string) => Promise<void>;
+  onSave: (content: string, preferredFolder?: string) => Promise<string | undefined | void>;
   onClose: () => void;
   onFolderChange: (folder: string) => void;
   onOpenSettings?: () => void;
@@ -127,10 +127,33 @@ export default function PostIt({
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const foldersRef = useRef<string[]>([]);
   const contentRef = useRef(content);
+  const cursorSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCursorRef = useRef<{ head: number; anchor: number } | null>(null);
+  // Suppresses cursor saves until the restore completes — prevents the initial
+  // selection at (0,0) from overwriting the previously saved position.
+  const isRestoringCursorRef = useRef(true);
+
+  // Unique key for cursor position persistence.
+  // Viewing windows use file path so cursor persists across Cmd+Shift+L reopens.
+  // Regular sticked notes use their UUID.
+  const cursorPosKey = (isViewing && originalPath)
+    ? originalPath
+    : (currentStickedId || stickedId || null);
 
   useEffect(() => {
     contentRef.current = content;
   }, [content]);
+
+  // Flush pending cursor save on unmount (don't lose position if closed within debounce window)
+  useEffect(() => {
+    return () => {
+      if (cursorSaveTimerRef.current) clearTimeout(cursorSaveTimerRef.current);
+      if (pendingCursorRef.current && cursorPosKey) {
+        const { head, anchor } = pendingCursorRef.current;
+        invoke("save_cursor_position", { id: cursorPosKey, head, anchor }).catch(() => {});
+      }
+    };
+  }, [cursorPosKey]);
 
   // Resolve the notes directory path for image path resolution
   const [notesDir, setNotesDir] = useState<string | null>(null);
@@ -252,6 +275,67 @@ export default function PostIt({
     if (vimEnabled === null) return; // editor not mounted yet
     setTimeout(() => editorRef.current?.focus(), 100);
   }, [folder, vimEnabled]);
+
+  // Flush pending cursor save immediately (used on blur / before close)
+  const flushCursorSave = useCallback(() => {
+    if (!pendingCursorRef.current || !cursorPosKey) return;
+    const { head, anchor } = pendingCursorRef.current;
+    pendingCursorRef.current = null;
+    if (cursorSaveTimerRef.current) {
+      clearTimeout(cursorSaveTimerRef.current);
+      cursorSaveTimerRef.current = null;
+    }
+    invoke("save_cursor_position", { id: cursorPosKey, head, anchor }).catch(() => {});
+  }, [cursorPosKey]);
+
+  // Debounced cursor position save — 500ms after last cursor movement
+  const handleCursorChange = useCallback(
+    (head: number, anchor: number) => {
+      if (isRestoringCursorRef.current) return;
+      pendingCursorRef.current = { head, anchor };
+      if (!cursorPosKey) return;
+      if (cursorSaveTimerRef.current) clearTimeout(cursorSaveTimerRef.current);
+      cursorSaveTimerRef.current = setTimeout(() => {
+        pendingCursorRef.current = null;
+        invoke("save_cursor_position", { id: cursorPosKey, head, anchor }).catch(() => {});
+      }, 500);
+    },
+    [cursorPosKey]
+  );
+
+  // Save cursor position on window blur — fires reliably before close/hide
+  useEffect(() => {
+    if (!cursorPosKey) return;
+    const onBlur = () => flushCursorSave();
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, [cursorPosKey, flushCursorSave]);
+
+  // Restore cursor position after editor mounts and content loads.
+  // isRestoringCursorRef stays true until this completes, suppressing saves so
+  // the initial (0,0) selection from editor mount can't overwrite the real position.
+  useEffect(() => {
+    if (vimEnabled === null || shouldWaitForNotesDir || !cursorPosKey) {
+      // No restore needed (capture mode or editor not ready yet) — unsuppress immediately
+      isRestoringCursorRef.current = false;
+      return;
+    }
+    isRestoringCursorRef.current = true;
+    const timer = setTimeout(() => {
+      invoke<{ head: number; anchor: number } | null>("get_cursor_position", { id: cursorPosKey })
+        .then((pos) => {
+          if (pos) editorRef.current?.setCursor(pos.head, pos.anchor);
+        })
+        .catch(() => {})
+        .finally(() => {
+          isRestoringCursorRef.current = false;
+        });
+    }, 50);
+    return () => {
+      clearTimeout(timer);
+      isRestoringCursorRef.current = false;
+    };
+  }, [vimEnabled, shouldWaitForNotesDir, cursorPosKey]);
 
   const clearTransientSlashQuery = useCallback(() => {
     if (isSticked) return;
@@ -390,7 +474,15 @@ export default function PostIt({
       const targetFolder = await resolveFolderForAction();
 
       setIsSaving(true);
-      await onSave(currentContent, targetFolder);
+      const savedPath = await onSave(currentContent, targetFolder);
+
+      // Save cursor position under the note's file path so Cmd+Shift+L
+      // can restore it when reopening the note in viewing mode.
+      if (savedPath && pendingCursorRef.current) {
+        const { head, anchor } = pendingCursorRef.current;
+        invoke("save_cursor_position", { id: savedPath, head, anchor }).catch(() => {});
+      }
+
       setTimeout(async () => {
         setIsSaving(false);
         setContent("");
@@ -733,9 +825,11 @@ export default function PostIt({
     if (!isMarkdownEffectivelyEmpty(currentContent)) {
       setIsSaving(true);
       try {
+        let savedNotePath: string | undefined;
+
         // If still pinned, close from sticked notes
         if (isPinned && currentStickedId) {
-          await invoke("close_sticked_note", {
+          savedNotePath = await invoke<string>("close_sticked_note", {
             id: currentStickedId,
             saveToFolder: true,
           });
@@ -745,12 +839,20 @@ export default function PostIt({
             path: originalPath,
             content: currentContent,
           });
+          savedNotePath = originalPath;
         } else {
           // If unpinned (not viewing), save as new file
-          await invoke("save_note", {
+          const result = await invoke<{ path: string }>("save_note", {
             folder,
             content: currentContent,
           });
+          savedNotePath = result.path;
+        }
+
+        // Save cursor position under the file path so Cmd+Shift+L restores it.
+        if (savedNotePath && pendingCursorRef.current) {
+          const { head, anchor } = pendingCursorRef.current;
+          invoke("save_cursor_position", { id: savedNotePath, head, anchor }).catch(() => {});
         }
         // Wait for save animation before closing
         setTimeout(async () => {
@@ -992,10 +1094,15 @@ export default function PostIt({
             position: [position.x, position.y],
             size: [logicalWidth, logicalHeight],
           });
-        } else if (isViewing) {
-          await invoke("save_viewing_window_size", {
+        }
+
+        // Always update viewing window geometry so Cmd+Shift+L reopens at this position
+        if (isPinnedSticked || isViewing) {
+          await invoke("save_viewing_window_geometry", {
             width: logicalWidth,
             height: logicalHeight,
+            x: position.x,
+            y: position.y,
           });
         }
       } catch (error) {
@@ -1009,8 +1116,15 @@ export default function PostIt({
       timeout = setTimeout(savePositionAndSize, 500);
     };
 
-    // mouseup catches drag-move events
+    // mouseup catches clicks inside the window (fallback for sticked notes)
     window.addEventListener("mouseup", debounced);
+
+    // onMoved fires when the OS completes a window drag (startDragging()
+    // bypasses the webview, so mouseup alone never fires after a drag)
+    let unlistenMoved: (() => void) | undefined;
+    getCurrentWindow().onMoved(() => {
+      debounced();
+    }).then((fn) => { unlistenMoved = fn; });
 
     // onResized catches native OS resize handle events
     let unlistenResize: (() => void) | undefined;
@@ -1020,36 +1134,53 @@ export default function PostIt({
 
     return () => {
       window.removeEventListener("mouseup", debounced);
+      unlistenMoved?.();
       unlistenResize?.();
       clearTimeout(timeout);
     };
   }, [isSticked, currentStickedId, isPinned, isViewing]);
 
-  // Save capture window size on resize (capture mode only — not sticked/viewing)
+  // Save capture window size + position on resize/move (capture mode only — not sticked/viewing)
   useEffect(() => {
     if (isSticked) return;
 
     let timeout: ReturnType<typeof setTimeout>;
     let unlistenResize: (() => void) | undefined;
+    let unlistenMoved: (() => void) | undefined;
 
-    getCurrentWindow().onResized(() => {
+    const saveCapture = async () => {
+      try {
+        const win = getCurrentWindow();
+        const scaleFactor = await win.scaleFactor();
+        const size = await win.innerSize();
+        const position = await win.outerPosition();
+        const w = size.width / scaleFactor;
+        const h = size.height / scaleFactor;
+        await invoke("save_capture_window_size", { width: w, height: h });
+        await invoke("save_viewing_window_geometry", {
+          width: w,
+          height: h,
+          x: position.x,
+          y: position.y,
+        });
+      } catch (error) {
+        console.error("Failed to save capture window geometry:", error);
+      }
+    };
+
+    const debounced = () => {
       clearTimeout(timeout);
-      timeout = setTimeout(async () => {
-        try {
-          const win = getCurrentWindow();
-          const scaleFactor = await win.scaleFactor();
-          const size = await win.innerSize();
-          const w = size.width / scaleFactor;
-          const h = size.height / scaleFactor;
-          await invoke("save_capture_window_size", { width: w, height: h });
-        } catch (error) {
-          console.error("Failed to save capture window size:", error);
-        }
-      }, 500);
-    }).then((fn) => { unlistenResize = fn; });
+      timeout = setTimeout(saveCapture, 500);
+    };
+
+    getCurrentWindow().onResized(() => debounced())
+      .then((fn) => { unlistenResize = fn; });
+    getCurrentWindow().onMoved(() => debounced())
+      .then((fn) => { unlistenMoved = fn; });
 
     return () => {
       unlistenResize?.();
+      unlistenMoved?.();
       clearTimeout(timeout);
     };
   }, [isSticked]);
@@ -1432,6 +1563,7 @@ export default function PostIt({
             onImagePaste={handleImagePaste}
             onImageDropPath={handleImageDropPath}
             onWikiLinkClick={handleWikiLinkClick}
+            onCursorChange={handleCursorChange}
           />
         )}
 

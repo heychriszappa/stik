@@ -311,8 +311,8 @@ export default function App() {
   }, []);
 
   const handleSave = useCallback(
-    async (content: string, preferredFolder?: string) => {
-      if (isMarkdownEffectivelyEmpty(content)) return;
+    async (content: string, preferredFolder?: string): Promise<string | undefined> => {
+      if (isMarkdownEffectivelyEmpty(content)) return undefined;
 
       const resolvedFolder = await resolveFolder(preferredFolder ?? currentFolder);
 
@@ -320,10 +320,11 @@ export default function App() {
         setCurrentFolder(resolvedFolder);
       }
 
-      await invoke("save_note", {
+      const result = await invoke<{ path: string }>("save_note", {
         folder: resolvedFolder,
         content,
       });
+      return result.path || undefined;
     },
     [currentFolder, resolveFolder]
   );

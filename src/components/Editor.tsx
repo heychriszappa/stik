@@ -85,6 +85,7 @@ interface EditorProps {
   onImagePaste?: (file: File) => Promise<string | null>;
   onImageDropPath?: (path: string) => Promise<string | null>;
   onWikiLinkClick?: (slug: string, path: string) => void;
+  onCursorChange?: (head: number, anchor: number) => void;
 }
 
 export interface EditorRef {
@@ -93,6 +94,7 @@ export interface EditorRef {
   clear: () => void;
   setContent: (content: string) => void;
   moveToEnd: () => void;
+  setCursor: (head: number, anchor: number) => void;
   getHTML: () => string;
   getText: () => string;
   setVimMode: (mode: VimMode) => void;
@@ -115,6 +117,7 @@ const Editor = forwardRef<EditorRef, EditorProps>(
       onImagePaste,
       onImageDropPath,
       onWikiLinkClick,
+      onCursorChange,
     },
     ref
   ) => {
@@ -141,6 +144,8 @@ const Editor = forwardRef<EditorRef, EditorProps>(
     onImageDropPathRef.current = onImageDropPath;
     const onWikiLinkClickRef = useRef(onWikiLinkClick);
     onWikiLinkClickRef.current = onWikiLinkClick;
+    const onCursorChangeRef = useRef(onCursorChange);
+    onCursorChangeRef.current = onCursorChange;
     const lastDomDropAtRef = useRef(0);
     const formatStateCallbackRef = useRef<((state: FormatState) => void) | null>(null);
 
@@ -452,6 +457,14 @@ const Editor = forwardRef<EditorRef, EditorProps>(
         }
       });
 
+      // Cursor change listener
+      const cursorChangeListener = EditorView.updateListener.of((update) => {
+        if (update.selectionSet) {
+          const { head, anchor } = update.state.selection.main;
+          onCursorChangeRef.current?.(head, anchor);
+        }
+      });
+
       // Doc change listener
       const docChangeListener = EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -502,6 +515,7 @@ const Editor = forwardRef<EditorRef, EditorProps>(
         headingFoldPlugin,
         autoCloseMarkup,
         formatStateListener,
+        cursorChangeListener,
         docChangeListener,
         bidiSupport(textDirection),
         EditorView.lineWrapping,
@@ -621,6 +635,18 @@ const Editor = forwardRef<EditorRef, EditorProps>(
           const end = view.state.doc.length;
           view.dispatch({ selection: { anchor: end } });
           view.focus();
+        }
+      },
+      setCursor: (head: number, anchor: number) => {
+        const view = viewRef.current;
+        if (view) {
+          const len = view.state.doc.length;
+          const h = Math.min(head, len);
+          const a = Math.min(anchor, len);
+          view.dispatch({
+            selection: { anchor: a, head: h },
+            scrollIntoView: true,
+          });
         }
       },
       getHTML: () => {

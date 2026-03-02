@@ -1,12 +1,49 @@
 use crate::commands::{notes, settings, sticked_notes};
 use crate::state::{AppState, LastSavedNote};
 use sticked_notes::StickedNote;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 const SETTINGS_WINDOW_WIDTH: f64 = 860.0;
 const SETTINGS_WINDOW_HEIGHT: f64 = 720.0;
 const SETTINGS_WINDOW_MIN_WIDTH: f64 = 760.0;
 const SETTINGS_WINDOW_MIN_HEIGHT: f64 = 560.0;
+
+/// Minimum overlap (in physical pixels) between window and monitor for the position to be usable.
+const MIN_OVERLAP: f64 = 80.0;
+
+/// Check if a window at (x, y) with the given size overlaps sufficiently with any connected
+/// monitor. All coordinates are in **physical pixels** (same space as `outerPosition()`).
+/// Uses rectangle intersection — handles negative coordinates from left/top monitors.
+fn is_window_visible_on_any_monitor(app: &AppHandle, x: f64, y: f64, w: f64, h: f64) -> bool {
+    let monitors = app
+        .get_webview_window("postit")
+        .and_then(|win| win.available_monitors().ok());
+
+    let Some(monitors) = monitors else {
+        return false;
+    };
+
+    for monitor in monitors {
+        let pos = monitor.position();
+        let size = monitor.size();
+
+        // All values in physical pixels — no scale conversion needed.
+        let mx = pos.x as f64;
+        let my = pos.y as f64;
+        let mw = size.width as f64;
+        let mh = size.height as f64;
+
+        // Rectangle intersection: overlap width/height between window and monitor
+        let overlap_w = (x + w).min(mx + mw) - x.max(mx);
+        let overlap_h = (y + h).min(my + mh) - y.max(my);
+
+        if overlap_w >= MIN_OVERLAP && overlap_h >= MIN_OVERLAP {
+            return true;
+        }
+    }
+
+    false
+}
 
 fn remember_last_note(state: &AppState, path: &str, folder: &str) {
     if path.trim().is_empty() {
@@ -25,10 +62,17 @@ fn remember_last_note(state: &AppState, path: &str, folder: &str) {
 
 pub fn show_postit_with_folder(app: &AppHandle, folder: &str) {
     if let Some(window) = app.get_webview_window("postit") {
-        // Restore persisted capture window size (if any)
         if let Ok(s) = settings::load_settings_from_file() {
+            // Restore persisted capture window size
             if let Some((w, h)) = s.capture_window_size {
                 let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+            }
+            // Restore position from shared viewing geometry so capture and
+            // viewing windows always open at the same spot.
+            if let Some((x, y)) = s.viewing_window_position {
+                let _ = window.set_position(tauri::Position::Physical(
+                    PhysicalPosition::new(x as i32, y as i32),
+                ));
             }
         }
         let _ = window.show();
@@ -216,28 +260,39 @@ pub fn create_sticked_window(app: AppHandle, note: StickedNote) -> Result<bool, 
         return Ok(true);
     }
 
-    let (x, y) = note.position.unwrap_or((100.0, 100.0));
+    let saved_position = note.position;
     let (width, height) = note.size.unwrap_or((400.0, 280.0));
     let url = format!("index.html?window=sticked&id={}", note.id);
 
+    // Build hidden — position after creation using PhysicalPosition to avoid
+    // the logical/physical mismatch in WebviewWindowBuilder::position().
     let window = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
         .title("Sticked Note")
         .inner_size(width, height)
         .min_inner_size(320.0, 200.0)
         .max_inner_size(800.0, 600.0)
-        .position(x, y)
         .resizable(true)
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
+        .visible(false)
         .build();
 
-    if let Err(e) = window {
-        return Err(format!("Failed to create sticked window: {}", e));
+    match window {
+        Ok(win) => {
+            if let Some((x, y)) = saved_position {
+                let _ = win.set_position(tauri::Position::Physical(
+                    PhysicalPosition::new(x as i32, y as i32),
+                ));
+            } else {
+                let _ = win.center();
+            }
+            let _ = win.show();
+            Ok(true)
+        }
+        Err(e) => Err(format!("Failed to create sticked window: {}", e)),
     }
-
-    Ok(true)
 }
 
 pub fn create_sticked_window_centered(app: AppHandle, note: StickedNote) -> Result<bool, String> {
@@ -294,9 +349,29 @@ pub async fn pin_capture_note(
     content: String,
     folder: String,
 ) -> Result<StickedNote, String> {
-    let note = sticked_notes::create_sticked_note(content, folder, None)?;
+    // Read saved viewing position so the pinned note opens where the last
+    // sticked/viewing window was, not always centered.
+    let saved = settings::load_settings_from_file().ok();
+    let saved_pos = saved.as_ref().and_then(|s| s.viewing_window_position);
+    let saved_size = saved.as_ref().and_then(|s| s.viewing_window_size);
 
-    create_sticked_window_centered(app.clone(), note.clone())?;
+    let mut note = sticked_notes::create_sticked_note(content, folder, None)?;
+
+    // Use saved viewing position if it's on a connected monitor, otherwise center.
+    let use_saved = saved_pos.is_some_and(|(x, y)| {
+        let (w, h) = saved_size.unwrap_or((400.0, 280.0));
+        is_window_visible_on_any_monitor(&app, x, y, w, h)
+    });
+
+    if let (true, Some((x, y))) = (use_saved, saved_pos) {
+        note.position = Some((x, y));
+        if let Some((w, h)) = saved_size {
+            note.size = Some((w, h));
+        }
+        create_sticked_window(app.clone(), note.clone())?;
+    } else {
+        create_sticked_window_centered(app.clone(), note.clone())?;
+    }
 
     // Persist the actual window position/size so it restores correctly
     let window_label = format!("sticked-{}", note.id);
@@ -309,6 +384,12 @@ pub async fn pin_capture_note(
                 Some((pos.x as f64, pos.y as f64)),
                 Some((size.width as f64, size.height as f64)),
             );
+
+            // Keep the global viewing geometry in sync.
+            let scale = win.scale_factor().unwrap_or(1.0);
+            let lw = size.width as f64 / scale;
+            let lh = size.height as f64 / scale;
+            let _ = settings::save_viewing_window_geometry(lw, lh, pos.x as f64, pos.y as f64);
         }
     }
 
@@ -354,12 +435,16 @@ pub async fn open_note_for_viewing(
 
     let url = format!("index.html?window=sticked&id={}&viewing=true", id);
 
-    let (width, height) = settings::load_settings_from_file()
-        .ok()
+    let saved_settings = settings::load_settings_from_file().ok();
+    let (width, height) = saved_settings
+        .as_ref()
         .and_then(|s| s.viewing_window_size)
         .unwrap_or((450.0, 320.0));
+    let saved_position = saved_settings.as_ref().and_then(|s| s.viewing_window_position);
 
-    let window = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
+    // Build hidden — we position after creation using PhysicalPosition to avoid
+    // the logical/physical mismatch in WebviewWindowBuilder::position().
+    let builder = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
         .title("View Note")
         .inner_size(width, height)
         .min_inner_size(320.0, 200.0)
@@ -369,14 +454,30 @@ pub async fn open_note_for_viewing(
         .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
-        .center()
-        .build();
+        .visible(false);
 
-    if let Err(e) = window {
-        return Err(format!("Failed to create viewing window: {}", e));
+    let window = builder.build();
+
+    match window {
+        Ok(win) => {
+            // Restore saved position in physical pixels, or center as fallback.
+            let positioned = saved_position.is_some_and(|(x, y)| {
+                is_window_visible_on_any_monitor(&app, x, y, width, height)
+            });
+            if let (true, Some((x, y))) = (positioned, saved_position) {
+                let _ = win.set_position(tauri::Position::Physical(
+                    PhysicalPosition::new(x as i32, y as i32),
+                ));
+            } else {
+                let _ = win.center();
+            }
+
+            let _ = win.show();
+            let _ = win.set_focus();
+            Ok(true)
+        }
+        Err(e) => Err(format!("Failed to create viewing window: {}", e)),
     }
-
-    Ok(true)
 }
 
 #[tauri::command]

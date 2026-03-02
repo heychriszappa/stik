@@ -108,7 +108,7 @@ pub fn update_sticked_note(
 }
 
 #[tauri::command]
-pub fn close_sticked_note(id: String, save_to_folder: bool) -> Result<bool, String> {
+pub fn close_sticked_note(id: String, save_to_folder: bool) -> Result<String, String> {
     let mut store = load_sticked_notes()?;
 
     let note_idx = store
@@ -119,17 +119,20 @@ pub fn close_sticked_note(id: String, save_to_folder: bool) -> Result<bool, Stri
 
     let note = store.notes.remove(note_idx);
 
-    // Save content to folder if requested and has content
+    // Save content to folder if requested and has content.
+    // Returns the saved file path so the frontend can persist cursor position.
+    let mut saved_path = String::new();
     if save_to_folder {
         use crate::commands::notes::{is_effectively_empty_markdown, save_note_inner};
         if !is_effectively_empty_markdown(&note.content) {
-            save_note_inner(note.folder, note.content)?;
+            let result = save_note_inner(note.folder, note.content)?;
+            saved_path = result.path;
         }
     }
 
     save_sticked_notes(&store)?;
 
-    Ok(true)
+    Ok(saved_path)
 }
 
 #[tauri::command]

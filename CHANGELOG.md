@@ -5,6 +5,15 @@ All notable changes to Stik will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+Editor live preview polish
+
+### Fixed
+- **Fenced code block cursor jump** — pressing Enter after typing the closing `` ``` `` fence no longer jumps the cursor back to a previous position. Root cause: CodeMirror 6 silently breaks `ViewPlugin` replace-decorations that cross newline boundaries; fence lines are now collapsed via within-line replace + CSS `height: 0` (SilverBullet pattern)
+- **Heading format dropdown clipped** — the H1/H2/H3 dropdown in the formatting toolbar was cut off by `overflow: hidden`; fixed with `overflow-x: clip` which allows the dropdown to escape the container without affecting vertical scroll
+- **Fenced code block flash on typing** — typing `` ` `` or `~` at the start of a line no longer causes a one-frame flash where the characters disappear. The incremental parser briefly creates an `InlineCode`/`Strikethrough` node before recognising `FencedCode`; added a guard to skip hiding markers that look like fence delimiters mid-typing
+- **Smart Enter/Backspace inside fenced code** — Enter before `~~` and Backspace inside `~~~~` no longer interfere with tilde-fenced code blocks
+
 ## [0.7.4] - 2026-03-02
 Window position and cursor persistence
 

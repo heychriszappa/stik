@@ -79,32 +79,33 @@ fn next_id() -> String {
 // ── Public API ─────────────────────────────────────────────────────
 
 /// Resolve the sidecar binary path.
-/// Prod: `{bundle}/Contents/Resources/binaries/darwinkit-{triple}`
-/// Dev:  `src-tauri/binaries/darwinkit-{triple}` (CARGO_MANIFEST_DIR)
+/// Tauri externalBin places sidecars in Contents/MacOS/ (prod) with the
+/// arch triple stripped. In dev, the binary lives in src-tauri/binaries/.
 fn resolve_sidecar_path(app: &tauri::AppHandle) -> Result<String, String> {
-    let binary_rel = format!(
-        "binaries/darwinkit-{}-apple-darwin",
-        std::env::consts::ARCH
-    );
+    let binary_name = format!("darwinkit-{}-apple-darwin", std::env::consts::ARCH);
 
-    // 1) Resource dir (works in production bundles)
+    // 1) Contents/MacOS/darwinkit — where Tauri externalBin places it in production
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let path = resource_dir.join(&binary_rel);
+        // resource_dir = Contents/Resources, go up to Contents/MacOS
+        let macos_dir = resource_dir.parent().unwrap_or(&resource_dir).join("MacOS");
+        let path = macos_dir.join("darwinkit");
         if path.exists() {
             return Ok(path.to_string_lossy().to_string());
         }
     }
 
-    // 2) Relative to CARGO_MANIFEST_DIR (works in dev via `cargo run` / `tauri dev`)
+    // 2) src-tauri/binaries/darwinkit-{triple} — dev mode
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let dev_path = std::path::Path::new(manifest_dir).join(&binary_rel);
+    let dev_path = std::path::Path::new(manifest_dir)
+        .join("binaries")
+        .join(&binary_name);
     if dev_path.exists() {
         return Ok(dev_path.to_string_lossy().to_string());
     }
 
     Err(format!(
-        "DarwinKit sidecar not found (looked for {})",
-        binary_rel
+        "DarwinKit sidecar not found (looked in MacOS/ and binaries/{})",
+        binary_name
     ))
 }
 

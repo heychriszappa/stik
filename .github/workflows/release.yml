@@ -55,8 +55,13 @@ jobs:
           cd src-tauri/darwinkit
           swift build -c release --arch arm64 --arch x86_64
           mkdir -p ../binaries
-          BINARY=$(find .build -name darwinkit -type f -perm +111 | grep -i release | head -1)
+          BINARY=".build/apple/Products/Release/darwinkit"
+          if [ ! -f "$BINARY" ]; then
+            echo "Universal binary not at expected path, searching..."
+            BINARY=$(find .build/apple/Products -name darwinkit -type f -perm +111 | head -1)
+          fi
           echo "Found binary at: $BINARY"
+          file "$BINARY"
           cp "$BINARY" ../binaries/darwinkit-aarch64-apple-darwin
           cp "$BINARY" ../binaries/darwinkit-x86_64-apple-darwin
 

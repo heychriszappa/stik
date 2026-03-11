@@ -5,6 +5,13 @@ All notable changes to Stik will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8] - 2026-03-11
+Hotfix: DarwinKit sidecar not found in production bundle
+
+### Fixed
+- **DarwinKit "bridge not started"** — sidecar path resolution looked in `Contents/Resources/binaries/` but Tauri `externalBin` places sidecars in `Contents/MacOS/`. Fixed to check the correct location. Also fixes AI features, semantic search, and folder suggestions being unavailable in release builds
+- **CI: wrong DarwinKit binary** — `find` command picked up an arm64-only intermediate build artifact instead of the universal binary. Now uses the deterministic path `.build/apple/Products/Release/darwinkit`
+
 ## [0.7.7] - 2026-03-10
 Hotfix: remove restricted iCloud entitlements that prevented app launch
 
@@ -413,6 +420,7 @@ First release
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.7.8 | 2026-03-11 | Hotfix: DarwinKit sidecar path resolution + CI universal binary fix |
 | 0.7.7 | 2026-03-10 | Hotfix: remove restricted iCloud entitlements blocking app launch |
 | 0.7.6 | 2026-03-10 | Note locking (AES-256-GCM + Touch ID), iCloud sync, storage abstraction, window positioning fix |
 | 0.7.5 | 2026-03-04 | Fenced code block cursor jump fix, heading dropdown clip fix, smart Enter/Backspace in fenced code |
@@ -440,6 +448,7 @@ First release
 | 0.2.0 | 2026-02-06 | Security hardening, performance index, architecture refactor |
 | 0.1.0 | 2026-02-05 | Initial release - core capture, search, manager |
 
+[0.7.8]: https://github.com/0xMassi/stik_app/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/0xMassi/stik_app/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/0xMassi/stik_app/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/0xMassi/stik_app/compare/v0.7.4...v0.7.5

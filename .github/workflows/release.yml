@@ -50,20 +50,29 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
 
-      - name: Build DarwinKit universal binary
+      - name: Build DarwinKit sidecar (per-arch)
+        # Builds each architecture in a separate `swift build` invocation
+        # so we stay on native SwiftPM instead of `--arch arm64 --arch
+        # x86_64` which routes through Xcode's xcbuild. xcbuild on the
+        # current macos-latest runner (Xcode 16.4) can't parse the
+        # swift-collections 1.x `_RopeModule` manifest and exits non-zero
+        # even though the actual build succeeds. Native SwiftPM parses
+        # the same manifest fine, so splitting into two single-arch
+        # builds sidesteps the problem entirely. Each tauri-action step
+        # below only consumes one arch so there's no need to lipo them
+        # back together.
         run: |
           cd src-tauri/darwinkit
-          swift build -c release --arch arm64 --arch x86_64
           mkdir -p ../binaries
-          BINARY=".build/apple/Products/Release/darwinkit"
-          if [ ! -f "$BINARY" ]; then
-            echo "Universal binary not at expected path, searching..."
-            BINARY=$(find .build/apple/Products -name darwinkit -type f -perm +111 | head -1)
-          fi
-          echo "Found binary at: $BINARY"
-          file "$BINARY"
-          cp "$BINARY" ../binaries/darwinkit-aarch64-apple-darwin
-          cp "$BINARY" ../binaries/darwinkit-x86_64-apple-darwin
+
+          swift build -c release --arch arm64
+          cp .build/arm64-apple-macosx/release/darwinkit ../binaries/darwinkit-aarch64-apple-darwin
+
+          swift build -c release --arch x86_64
+          cp .build/x86_64-apple-macosx/release/darwinkit ../binaries/darwinkit-x86_64-apple-darwin
+
+          file ../binaries/darwinkit-aarch64-apple-darwin
+          file ../binaries/darwinkit-x86_64-apple-darwin
 
       - name: Install protobuf compiler
         run: brew install protobuf

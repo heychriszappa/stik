@@ -103,7 +103,10 @@ jobs:
           releaseBody: 'See [CHANGELOG](https://github.com/0xMassi/stik_app/blob/main/CHANGELOG.md) for details.'
           releaseDraft: true
           prerelease: false
-          args: --target aarch64-apple-darwin
+          # --bundles app,updater: skip tauri-bundler's bundle_dmg.sh
+          # which dies ~10s into AppleScript icon positioning on the
+          # current runner. We build the DMG ourselves in a later step.
+          args: --target aarch64-apple-darwin --bundles app,updater
 
       - name: Build and release (x86_64)
         uses: tauri-apps/tauri-action@v0
@@ -124,7 +127,49 @@ jobs:
           releaseName: 'Stik v__VERSION__'
           releaseDraft: true
           prerelease: false
-          args: --target x86_64-apple-darwin
+          args: --target x86_64-apple-darwin --bundles app,updater
+
+      - name: Build signed DMGs and upload to release
+        # Tauri's bundle_dmg.sh / hdiutil / AppleScript pipeline keeps
+        # flaking on the ephemeral macOS runner. Build DMGs ourselves
+        # with a single `hdiutil create` per arch: simple, deterministic,
+        # fully visible in the logs. Each DMG is signed with the same
+        # Developer ID identity the tauri-action step used and uploaded
+        # to the existing draft release so the downstream Homebrew step
+        # can find them via `gh release download --pattern "*.dmg"`.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          for PAIR in "aarch64-apple-darwin:aarch64" "x86_64-apple-darwin:x64"; do
+            RUST_TARGET="${PAIR%%:*}"
+            DMG_ARCH="${PAIR##*:}"
+            APP_PATH="src-tauri/target/${RUST_TARGET}/release/bundle/macos/Stik.app"
+            DMG_NAME="Stik_${VERSION}_${DMG_ARCH}.dmg"
+            DMG_PATH="${RUNNER_TEMP}/${DMG_NAME}"
+
+            if [ ! -d "$APP_PATH" ]; then
+              echo "::error::Expected .app not found at $APP_PATH"
+              ls -la "$(dirname "$APP_PATH")" || true
+              exit 1
+            fi
+
+            echo "==> Creating $DMG_NAME from $APP_PATH"
+            hdiutil create \
+              -volname "Stik" \
+              -srcfolder "$APP_PATH" \
+              -ov -format UDZO \
+              "$DMG_PATH"
+
+            echo "==> Signing $DMG_NAME"
+            codesign --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$DMG_PATH"
+            codesign --verify --verbose=2 "$DMG_PATH"
+
+            echo "==> Uploading $DMG_NAME to draft release"
+            gh release upload "v${VERSION}" "$DMG_PATH" --clobber
+          done
 
       - name: Update Homebrew tap
         if: success()

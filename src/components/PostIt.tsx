@@ -595,19 +595,11 @@ export default function PostIt({
     if (vimEnabled) return; // Vim mode uses command bar (:q, :wq) instead of Escape
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Enter (without Shift) saves and closes, just like Escape.
-      // Shift+Enter is handled by CodeMirror as a plain newline (insertNewline).
-      if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Cmd+Enter saves and closes.
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         const target = e.target as Element | null;
         const inLinkPopover = Boolean(target?.closest(".link-popover"));
         if (inLinkPopover) return;
-        // Don't intercept Enter when autocomplete is open — let CM6 select the suggestion.
-        const view = editorRef.current?.getView();
-        const autocompleteStatus = view ? completionStatus(view.state) : null;
-        const isAutocompleteOpen =
-          autocompleteStatus === "active" || autocompleteStatus === "pending";
-        if (isAutocompleteOpen) return;
-        // Don't fire if a folder-picker dropdown or copy menu is open.
         if (showPicker || isCopyMenuOpen || isSaving || isPinning) return;
         e.preventDefault();
         if (isSticked && !isPinned) {

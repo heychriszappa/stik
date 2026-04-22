@@ -12,7 +12,7 @@ pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     });
     let streak_label = stats::format_capture_streak_label(streak_days);
 
-    let quit = MenuItem::with_id(app, "quit", "Quit Stik", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Memo", true, None::<&str>)?;
     let new_note = MenuItem::with_id(app, "new_note", "New Note", true, None::<&str>)?;
     let capture_streak =
         MenuItem::with_id(app, "capture_streak", &streak_label, false, None::<&str>)?;

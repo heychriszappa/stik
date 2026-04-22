@@ -187,22 +187,11 @@ const Editor = forwardRef<EditorRef, EditorProps>(
             return false;
           },
         },
-        // Enter: do NOT insert a newline — Enter is handled at the PostIt level
-        // to save and close the note. Returning true here consumes the event so
-        // CodeMirror's default newline insertion is suppressed.
-        {
-          key: "Enter",
-          run: (_view) => {
-            // Autocomplete selection is handled upstream (closeCompletion check
-            // in PostIt), so we just swallow the bare Enter here.
-            return true;
-          },
-        },
-        // Shift+Enter: insert a newline (line break within the note).
+        // Enter: insert a newline (standard behaviour).
         // Smart behaviour: if cursor is right before closing markers (** ~~ ==),
         // close the formatting first, then insert the newline.
         {
-          key: "Shift-Enter",
+          key: "Enter",
           run: (view) => {
             const { head, empty } = view.state.selection.main;
             if (empty) {

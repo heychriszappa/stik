@@ -102,7 +102,7 @@ export function Dropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-bg border border-line rounded-lg shadow-stik overflow-hidden max-h-[220px] overflow-y-auto">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-bg border border-line rounded-lg shadow-memo overflow-hidden max-h-[220px] overflow-y-auto">
           {allOptions.map((option) => (
             <button
               key={option.value}
@@ -185,7 +185,7 @@ function SettingsToast({
     <div
       className={`
         fixed bottom-6 left-1/2 -translate-x-1/2 z-[250]
-        px-4 py-2.5 rounded-xl shadow-stik
+        px-4 py-2.5 rounded-xl shadow-memo
         text-[13px] font-medium bg-ink text-bg
         transition-all duration-200 ease-out
         ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}
@@ -1659,7 +1659,7 @@ export default function SettingsContent({
     ? settings.use_directory_as_root
       ? settings.notes_directory
       : `${settings.notes_directory}/Stik`
-    : resolvedNotesDir || "~/Documents/Stik";
+    : resolvedNotesDir || "~/Documents/Memo";
   const linkedRepoPath =
     settings.git_sharing.repository_layout === "stik_root"
       ? notesDir

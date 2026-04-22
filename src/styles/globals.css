@@ -39,7 +39,7 @@
   --overlay-bg: rgba(0, 0, 0, 0.6);
 
   /* Shadows */
-  --shadow-stik: 0 20px 60px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-memo: 0 20px 60px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.04);
   --shadow-coral-sm: 0 4px 16px rgba(232, 112, 95, 0.25);
   --shadow-coral-lg: 0 8px 24px rgba(232, 112, 95, 0.35);
 
@@ -78,7 +78,7 @@
 
   --overlay-bg: rgba(0, 0, 0, 0.7);
 
-  --shadow-stik: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-memo: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --shadow-coral-sm: 0 4px 16px rgba(232, 112, 95, 0.20);
   --shadow-coral-lg: 0 8px 24px rgba(232, 112, 95, 0.30);
 

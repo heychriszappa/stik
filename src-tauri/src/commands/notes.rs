@@ -41,40 +41,56 @@ pub struct SearchResult {
     pub locked: bool,
 }
 
-/// Generate a slug from content (first 5 words, max 40 chars)
+/// Build a filesystem-safe slug from the first line of content, capped at 33 chars.
+/// Strips leading markdown heading markers (#), trims whitespace, replaces
+/// non-alphanumeric characters with hyphens, collapses runs of hyphens, and
+/// removes leading/trailing hyphens.
 fn generate_slug(content: &str) -> String {
-    let cleaned: String = content
-        .chars()
-        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
-        .collect();
+    // Take the first non-empty line
+    let first_line = content
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
 
-    let slug: String = cleaned
+    // Strip leading markdown heading markers
+    let stripped = first_line.trim_start_matches('#').trim();
+
+    // Keep only alphanumeric and whitespace, replace the rest with '-'
+    let slug: String = stripped
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == ' ' { c } else { '-' })
+        .collect::<String>()
         .split_whitespace()
-        .take(5)
         .collect::<Vec<_>>()
         .join("-")
         .to_lowercase();
 
-    if slug.len() > 40 {
-        let mut end = 40;
+    // Truncate at 33 chars on a char boundary
+    let slug = if slug.len() > 33 {
+        let mut end = 33;
         while end > 0 && !slug.is_char_boundary(end) {
             end -= 1;
         }
-        slug[..end].to_string()
-    } else if slug.is_empty() {
+        // Trim any trailing hyphen left by truncation
+        slug[..end].trim_end_matches('-').to_string()
+    } else {
+        slug
+    };
+
+    if slug.is_empty() {
         "note".to_string()
     } else {
         slug
     }
 }
 
-/// Generate timestamp-based filename with UUID suffix to prevent collisions
+/// Generate filename from the first 33 chars of the first line (as a slug).
+/// A short UUID suffix prevents collisions when notes share the same opening line.
 fn generate_filename(content: &str) -> String {
-    let now = Local::now();
-    let timestamp = now.format("%Y%m%d-%H%M%S").to_string();
     let slug = generate_slug(content);
     let suffix = &uuid::Uuid::new_v4().to_string()[..4];
-    format!("{}-{}-{}.md", timestamp, slug, suffix)
+    format!("{}-{}.md", slug, suffix)
 }
 
 fn is_break_placeholder_line(line: &str) -> bool {
@@ -241,7 +257,7 @@ pub fn get_note_content_inner(path: &str) -> Result<String, String> {
 
     if !canonical_note.starts_with(&canonical_stik) {
         return Err(format!(
-            "Note is outside the Stik folder.\n  note: {}\n  root: {}",
+            "Note is outside the Memo folder.\n  note: {}\n  root: {}",
             note_path.display(),
             stik_folder.display()
         ));
@@ -354,9 +370,9 @@ pub fn delete_note(
     let stik_folder = get_stik_folder()?;
     let note_path = PathBuf::from(&path);
 
-    // Validate path is within Stik folder
+    // Validate path is within Memo folder
     if !note_path.starts_with(&stik_folder) {
-        return Err("Invalid path: note must be within Stik folder".to_string());
+        return Err("Invalid path: note must be within Memo folder".to_string());
     }
 
     // Check file exists
@@ -405,9 +421,9 @@ pub fn move_note(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    // Validate source path is within Stik folder
+    // Validate source path is within Memo folder
     if !source_path.starts_with(&stik_folder) {
-        return Err("Invalid path: note must be within Stik folder".to_string());
+        return Err("Invalid path: note must be within Memo folder".to_string());
     }
 
     // Check source file exists
@@ -449,8 +465,14 @@ pub fn move_note(
     git_share::notify_note_changed(&source_folder);
     git_share::notify_note_changed(&target_folder);
 
-    // Extract created date from filename
-    let created = filename.split('-').take(2).collect::<Vec<_>>().join("-");
+    // Extract created date from filesystem metadata (filename no longer encodes a timestamp)
+    let created = std::fs::metadata(&target_path)
+        .and_then(|m| m.modified())
+        .map(|t| {
+            let dt: chrono::DateTime<chrono::Local> = t.into();
+            dt.format("%Y%m%d-%H%M%S").to_string()
+        })
+        .unwrap_or_default();
 
     let locked = super::note_lock::is_locked_content(&content);
     Ok(NoteInfo {

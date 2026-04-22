@@ -20,7 +20,7 @@ type WindowType =
   | "settings"
   | "command-palette"
   | "apple-notes-picker";
-const PENDING_UPDATE_KEY = "stik_pending_update_version";
+const PENDING_UPDATE_KEY = "memo_pending_update_version";
 
 function getWindowInfo(): { type: WindowType; id?: string; viewing?: boolean } {
   const params = new URLSearchParams(window.location.search);
@@ -306,7 +306,7 @@ export default function App() {
         }
 
         console.log(
-          `Stik update available: v${update.currentVersion} → v${update.version}`,
+          `Memo update available: v${update.currentVersion} → v${update.version}`,
         );
         await update.downloadAndInstall();
         localStorage.setItem(PENDING_UPDATE_KEY, update.version);

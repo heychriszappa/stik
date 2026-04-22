@@ -243,12 +243,11 @@ fn read_note_entry(path: &PathBuf, folder: &str) -> Option<NoteEntry> {
     let locked = super::note_lock::is_locked_content(&content);
 
     let (title, preview, content_len) = if locked {
-        // Derive title from filename: YYYYMMDD-HHMMSS-slug-uuid.md → slug
+        // Derive title from filename: slug-uuid.md → slug (drop the 4-char UUID suffix)
         let fname = path.file_stem().unwrap_or_default().to_string_lossy();
         let title = fname
-            .splitn(3, '-') // ["YYYYMMDD", "HHMMSS", "slug-uuid"]
-            .nth(2) // "slug-uuid"
-            .and_then(|rest| rest.rfind('-').map(|i| &rest[..i])) // drop UUID suffix
+            .rfind('-')
+            .map(|i| &fname[..i]) // everything before the last '-' (the UUID suffix)
             .filter(|s| !s.is_empty())
             .map(|s| s.replace('-', " "))
             .unwrap_or_else(|| fname.to_string());

@@ -21,7 +21,7 @@ export default function AnalyticsNotice({ onDismiss }: AnalyticsNoticeProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-      <div className="bg-bg rounded-[14px] w-[380px] shadow-stik flex flex-col overflow-hidden">
+      <div className="bg-bg rounded-[14px] w-[380px] shadow-memo flex flex-col overflow-hidden">
         {/* Content */}
         <div className="px-5 pt-5 pb-0">
           <h2 className="text-[14px] font-semibold text-ink mb-2.5">What's New</h2>

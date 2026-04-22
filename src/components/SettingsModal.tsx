@@ -565,7 +565,7 @@ export default function SettingsModal({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
       <div
-        className="bg-bg rounded-[14px] max-h-[85vh] flex flex-col shadow-stik overflow-hidden border border-line/50"
+        className="bg-bg rounded-[14px] max-h-[85vh] flex flex-col shadow-memo overflow-hidden border border-line/50"
         style={{
           width: `min(96vw, ${SETTINGS_MODAL_MAX_WIDTH}px)`,
           minWidth: `min(96vw, ${SETTINGS_MODAL_MIN_WIDTH}px)`,

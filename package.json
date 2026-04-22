@@ -1,7 +1,7 @@
 {
-  "name": "stik",
+  "name": "memo",
   "version": "0.8.0",
-  "description": "Instant thought capture. One shortcut, post-it appears, type, close.",
+  "description": "Instant thought capture. One shortcut, note appears, type, close.",
   "type": "module",
   "scripts": {
     "dev": "vite",

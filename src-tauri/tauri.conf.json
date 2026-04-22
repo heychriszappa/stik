@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Stik",
+  "productName": "Memo",
   "version": "0.8.0",
-  "identifier": "com.stik.app",
+  "identifier": "com.memo.app",
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "postit",
-        "title": "Stik",
+        "title": "Memo",
         "width": 400,
         "height": 300,
         "minWidth": 320,
@@ -36,10 +36,10 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$DOCUMENT/Stik/**",
-          "$DOCUMENT/Stik/**/.assets/**",
-          "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Stik/**",
-          "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Stik/**/.assets/**"
+          "$DOCUMENT/Memo/**",
+          "$DOCUMENT/Memo/**/.assets/**",
+          "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Memo/**",
+          "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Memo/**/.assets/**"
         ]
       }
     }

@@ -30,7 +30,7 @@ export default function LockPrompt({
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-72 rounded-2xl bg-bg border border-line shadow-stik p-6 text-center">
+      <div className="w-72 rounded-2xl bg-bg border border-line shadow-memo p-6 text-center">
         <svg
           width="32"
           height="32"

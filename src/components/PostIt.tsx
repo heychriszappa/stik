@@ -81,7 +81,7 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
     <div
       className={`
         fixed bottom-6 left-1/2 -translate-x-1/2 z-[250]
-        px-4 py-2.5 rounded-xl shadow-stik
+        px-4 py-2.5 rounded-xl shadow-memo
         text-[13px] font-medium bg-ink text-bg
         transition-all duration-200 ease-out
         ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}
@@ -136,7 +136,7 @@ export default function PostIt({
     "auto",
   );
   const [icloudEnabled, setIcloudEnabled] = useState(false);
-  const [zenMode, setZenMode] = useState(false);
+  const [zenMode, setZenMode] = useState(true);
   const [dictationActiveModel, setDictationActiveModel] = useState<
     string | null
   >(null);
@@ -145,7 +145,7 @@ export default function PostIt({
   );
   const [formatToolbar, setFormatToolbar] = useState(() => {
     try {
-      return localStorage.getItem("stik:format-toolbar") !== "0";
+      return localStorage.getItem("memo:format-toolbar") !== "0";
     } catch {
       return true;
     }
@@ -595,6 +595,29 @@ export default function PostIt({
     if (vimEnabled) return; // Vim mode uses command bar (:q, :wq) instead of Escape
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Enter (without Shift) saves and closes, just like Escape.
+      // Shift+Enter is handled by CodeMirror as a plain newline (insertNewline).
+      if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const target = e.target as Element | null;
+        const inLinkPopover = Boolean(target?.closest(".link-popover"));
+        if (inLinkPopover) return;
+        // Don't intercept Enter when autocomplete is open — let CM6 select the suggestion.
+        const view = editorRef.current?.getView();
+        const autocompleteStatus = view ? completionStatus(view.state) : null;
+        const isAutocompleteOpen =
+          autocompleteStatus === "active" || autocompleteStatus === "pending";
+        if (isAutocompleteOpen) return;
+        // Don't fire if a folder-picker dropdown or copy menu is open.
+        if (showPicker || isCopyMenuOpen || isSaving || isPinning) return;
+        e.preventDefault();
+        if (isSticked && !isPinned) {
+          handleSaveAndCloseSticked();
+        } else {
+          handleSaveAndClose();
+        }
+        return;
+      }
+
       if (e.key !== "Escape") return;
 
       const target = e.target as Element | null;
@@ -856,7 +879,7 @@ export default function PostIt({
         } else {
           const activeElement = document.activeElement as HTMLElement | null;
           const shouldRestoreEditorFocus =
-            !!activeElement?.closest(".stik-editor");
+            !!activeElement?.closest(".memo-editor");
 
           if (shouldRestoreEditorFocus) {
             editorRef.current?.blur();
@@ -1440,7 +1463,7 @@ export default function PostIt({
       if (!path) return;
       try {
         const noteContent = await invoke<string>("get_note_content", { path });
-        // Extract folder from path: ~/Documents/Stik/<folder>/<file>.md
+        // Extract folder from path: ~/Documents/Memo/<folder>/<file>.md
         const parts = path.split("/");
         const noteFolder = parts[parts.length - 2] || folder;
         await invoke("open_note_for_viewing", {
@@ -1628,7 +1651,7 @@ export default function PostIt({
                   >
                     ●
                   </span>
-                  <span>{folder || "Stik"}</span>
+                  <span>{folder || "Memo"}</span>
                   <span className="text-[8px] opacity-50">▼</span>
                 </button>
 
@@ -1677,7 +1700,7 @@ export default function PostIt({
                   )}
 
                   {isCopyMenuOpen && (
-                    <div className="absolute top-full right-0 mt-1 w-40 rounded-lg border border-line bg-bg shadow-stik overflow-hidden z-[240]">
+                    <div className="absolute top-full right-0 mt-1 w-40 rounded-lg border border-line bg-bg shadow-memo overflow-hidden z-[240]">
                       <button
                         onClick={() => void handleCopy("rich")}
                         className="w-full px-3 py-2 text-left text-[11px] text-ink hover:bg-line/50 transition-colors"
@@ -1941,7 +1964,7 @@ export default function PostIt({
             >
               <span className="flex items-center gap-2 font-mono text-stone">
                 <span>
-                  <span className="text-coral">~</span>/Stik/
+                  <span className="text-coral">~</span>/Memo/
                   {folder && (
                     <>
                       <span className="text-coral">{folder}</span>/
@@ -1981,7 +2004,7 @@ export default function PostIt({
                           setFormatToolbar(next);
                           try {
                             localStorage.setItem(
-                              "stik:format-toolbar",
+                              "memo:format-toolbar",
                               next ? "1" : "0",
                             );
                           } catch {}

@@ -54,21 +54,21 @@ pub fn stik_root() -> Result<PathBuf, String> {
             let path = if use_as_root {
                 PathBuf::from(&dir)
             } else {
-                PathBuf::from(&dir).join("Stik")
+                PathBuf::from(&dir).join("Memo")
             };
             fs::create_dir_all(&path).map_err(|e| e.to_string())?;
             Ok(path)
         }
         StorageMode::Local => {
             let docs = dirs::document_dir().ok_or("Could not find Documents directory")?;
-            let path = docs.join("Stik");
+            let path = docs.join("Memo");
             fs::create_dir_all(&path).map_err(|e| e.to_string())?;
             Ok(path)
         }
     }
 }
 
-/// Stik uses the generic iCloud Drive folder (`com~apple~CloudDocs`) rather
+/// Memo uses the generic iCloud Drive folder (`com~apple~CloudDocs`) rather
 /// than a dedicated ubiquity container. A dedicated container would require
 /// the `com.apple.developer.icloud-container-identifiers` entitlement and a
 /// provisioning profile from Apple Developer — which blocks ad-hoc signed
@@ -104,8 +104,8 @@ fn icloud_stik_root() -> Result<PathBuf, String> {
         );
     }
 
-    let path = drive.join("Stik");
-    fs::create_dir_all(&path).map_err(|e| format!("Failed to create iCloud Stik folder: {}", e))?;
+    let path = drive.join("Memo");
+    fs::create_dir_all(&path).map_err(|e| format!("Failed to create iCloud Memo folder: {}", e))?;
     Ok(path)
 }
 

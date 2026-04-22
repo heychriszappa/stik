@@ -49,7 +49,7 @@ export default function MovePicker({
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-bg rounded-xl border border-line shadow-stik w-[min(90vw,320px)] flex flex-col overflow-hidden max-h-[70vh]">
+      <div className="bg-bg rounded-xl border border-line shadow-memo w-[min(90vw,320px)] flex flex-col overflow-hidden max-h-[70vh]">
         <div className="px-4 py-3 border-b border-line">
           <h2 className="text-sm font-semibold text-ink">
             Move note to folder

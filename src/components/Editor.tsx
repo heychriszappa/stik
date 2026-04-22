@@ -28,7 +28,7 @@ import { search, searchKeymap } from "@codemirror/search";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
-import { stikEditorTheme, stikHighlightStyle } from "@/extensions/cm-theme";
+import { memoEditorTheme, memoHighlightStyle } from "@/extensions/cm-theme";
 import {
   toggleInlineFormat,
   insertLink,
@@ -187,19 +187,28 @@ const Editor = forwardRef<EditorRef, EditorProps>(
             return false;
           },
         },
-        // Smart Enter: if cursor is right before closing markers (** ~~ ==),
-        // close the formatting first, then newline. Markdown inline syntax
-        // can't span lines, so this prevents broken formatting.
-        // Skip inside FencedCode — ~~ there is fence syntax, not strikethrough.
+        // Enter: do NOT insert a newline — Enter is handled at the PostIt level
+        // to save and close the note. Returning true here consumes the event so
+        // CodeMirror's default newline insertion is suppressed.
         {
           key: "Enter",
+          run: (_view) => {
+            // Autocomplete selection is handled upstream (closeCompletion check
+            // in PostIt), so we just swallow the bare Enter here.
+            return true;
+          },
+        },
+        // Shift+Enter: insert a newline (line break within the note).
+        // Smart behaviour: if cursor is right before closing markers (** ~~ ==),
+        // close the formatting first, then insert the newline.
+        {
+          key: "Shift-Enter",
           run: (view) => {
             const { head, empty } = view.state.selection.main;
             if (empty) {
               const doc = view.state.doc;
               const after = doc.sliceString(head, Math.min(head + 2, doc.length));
               if (after === "**" || after === "~~" || after === "==") {
-                // Don't interfere inside fenced code blocks
                 const tree = syntaxTree(view.state);
                 const nodeAt = tree.resolveInner(head, 1);
                 const inFenced = nodeAt.name === "FencedCode" || nodeAt.parent?.name === "FencedCode";
@@ -508,8 +517,8 @@ const Editor = forwardRef<EditorRef, EditorProps>(
             },
           ],
         }),
-        stikEditorTheme,
-        stikHighlightStyle,
+        memoEditorTheme,
+        memoHighlightStyle,
         // Required for Vim visual mode highlight:
         // @replit/codemirror-vim makes native ::selection transparent.
         // drawSelection renders .cm-selectionBackground instead.
@@ -534,7 +543,7 @@ const Editor = forwardRef<EditorRef, EditorProps>(
         bidiSupport(textDirection),
         EditorView.lineWrapping,
         // CSS class for the content element
-        EditorView.contentAttributes.of({ class: "stik-editor" }),
+        EditorView.contentAttributes.of({ class: "memo-editor" }),
       ];
 
       // Add vim mode if enabled
